@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafiplot - Centro de Herramientas para Imprenta</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+      import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+      window.firebaseConnector = {
+        config: {"apiKey":"AIzaSyD6wvuLYef1M0pXXKu3cVve2B3WBkwBq7c","authDomain":"pagina-web-f38a8.firebaseapp.com","databaseURL":"https://pagina-web-f38a8-default-rtdb.firebaseio.com","projectId":"pagina-web-f38a8","storageBucket":"pagina-web-f38a8.firebasestorage.app","messagingSenderId":"230997143198","appId":"1:230997143198:web:d397fb22b3188aec66d58f","measurementId":"G-MK6Q27DRHY"},
+        app: null,
+        db: null,
+        async init() {
+          try {
+            this.app = getApps().length ? getApps()[0] : initializeApp(this.config);
+            this.db = getDatabase(this.app);
+            return true;
+          } catch (e) {
+            console.error("Firebase init:", e);
+            return false;
+          }
+        },
+        async test() {
+          if (!this.app) {
+            const ok = await this.init();
+            if (!ok) throw new Error("No se pudo inicializar Firebase");
+          }
+          try {
+            await get(ref(this.db, "__connection_test"));
+            return {ok:true, message:"Firebase conectado"};
+          } catch (e) {
+            if (e?.code === "PERMISSION_DENIED" || e?.code === "PERMISSION_DENIED:") {
+              return {ok:true, message:"Firebase activo; las reglas impiden la lectura de prueba"};
+            }
+            throw e;
+          }
+        }
+      };
+    </script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 900: '#1e3a8a' },
+                        dark: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Glassmorphism */
+        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); }
+        .dark .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); }
+        
+        /* Wrapper & Iframe setup */
+        .iframe-wrapper {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            display: none;
+            border-radius: 0.75rem;
+        }
+        .iframe-wrapper.active { display: flex; flex-direction: column; }
+        
+        /* Split view grid container */
+        .split-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 0.75rem;
+            height: 100%;
+            width: 100%;
+            padding: 0.75rem;
+            overflow-y: auto;
+        }
+        
+        .tool-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #fff;
+            transform-origin: 0 0;
+            transition: transform 0.15s ease-out;
+        }
+        
+        /* Animations */
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Toast Notifications */
+        .toast {
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            transform: translateY(100px); opacity: 0;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
+        /* Tool Cards */
+        .tool-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .tool-card:hover { transform: translateY(-3px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.12); }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Sticky Note Themes */
+        .note-yellow { background-color: #fef9c3; border-color: #fde047; color: #713f12; }
+        .dark .note-yellow { background-color: #422006; border-color: #a16207; color: #fef08a; }
+
+        .note-blue { background-color: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
+        .dark .note-blue { background-color: #172554; border-color: #1d4ed8; color: #bfdbfe; }
+
+        .note-green { background-color: #dcfce7; border-color: #86efac; color: #14532d; }
+        .dark .note-green { background-color: #052e16; border-color: #15803d; color: #bbf7d0; }
+
+        .note-pink { background-color: #fce7f3; border-color: #f9a8d4; color: #831843; }
+        .dark .note-pink { background-color: #500724; border-color: #be185d; color: #fbcfe8; }
+
+        .note-purple { background-color: #f3e8ff; border-color: #d8b4fe; color: #581c87; }
+        .dark .note-purple { background-color: #3b0764; border-color: #7e22ce; color: #e9d5ff; }
+
+        .note-orange { background-color: #ffedd5; border-color: #fdba74; color: #7c2d12; }
+        .dark .note-orange { background-color: #431407; border-color: #c2410c; color: #fed7aa; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-dark-950 dark:text-gray-200 flex h-screen select-none overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 bg-white/90 dark:bg-dark-800/90 backdrop-blur-md border-r border-gray-200/80 dark:border-gray-800 flex flex-col transition-all z-20 shadow-lg relative bg-cover bg-center bg-no-repeat">
+        <div id="sidebar-bg-overlay" class="absolute inset-0 bg-white/80 dark:bg-dark-800/90 backdrop-blur-sm z-[-1] pointer-events-none hidden"></div>
+        <!-- Brand / Logo -->
+        <div class="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+            <div class="cursor-pointer group" onclick="app.showHome()">
+                <div class="text-2xl font-black tracking-tight leading-none select-none flex items-center gap-1">
+                    <span class="text-red-600 group-hover:scale-110 transition-transform inline-block">G</span>
+                    <span class="text-gray-900 dark:text-white">rafiplot</span>
+                    <span class="ml-1 text-[9px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/60 dark:text-primary-300 font-bold uppercase">PRO</span>
+                </div>
+                <div class="text-[10px] text-gray-500 dark:text-gray-400 font-bold tracking-widest uppercase mt-1">Centro de Imprenta</div>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-3 space-y-6">
+            <!-- Menú Principal -->
+            <div>
+                <h3 class="px-3 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Navegación</h3>
+                <nav class="space-y-1">
+                    <button onclick="app.filterCategory(null)" class="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-all text-left font-medium" id="nav-home">
+                        <i class="fas fa-heart w-5 text-red-500"></i> Inicio (Favoritos)
+                    </button>
+                    <button onclick="app.filterCategory('all')" class="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-all text-left" id="nav-all">
+                        <i class="fas fa-th-large w-5 text-indigo-500"></i> Todas
+                    </button>
+                    <button onclick="app.filterCategory('favorites')" class="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-all text-left" id="nav-favorites">
+                        <i class="fas fa-star w-5 text-yellow-500"></i> Favoritos
+                    </button>
+                    <button onclick="app.filterCategory('recent')" class="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-all text-left" id="nav-recent">
+                        <i class="fas fa-clock w-5 text-blue-500"></i> Recientes
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Categorías -->
+            <div>
+                <div class="flex items-center justify-between px-3 mb-2">
+                    <h3 class="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Categorías</h3>
+                    <button onclick="app.openCategoryModal()" class="text-gray-400 hover:text-primary-500 transition-colors" title="Gestionar categorías">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                </div>
+                <nav class="space-y-1" id="categories-nav">
+                    <!-- Categorías inyectadas por JS -->
+                </nav>
+            </div>
+        </div>
+
+        <div class="p-3 border-t border-gray-200 dark:border-gray-800 space-y-1.5">
+            <button onclick="app.openNotesDrawer()" class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition-all font-medium">
+                <span class="flex items-center gap-2.5"><i class="fas fa-sticky-note text-amber-500"></i> Notas Rápidas</span>
+                <span id="sidebar-notes-count" class="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+            </button>
+            <button onclick="app.openConfigModal()" class="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left text-gray-600 dark:text-gray-400">
+                <i class="fas fa-sliders-h w-5"></i> Configuración
+            </button>
+            <button onclick="app.toggleTheme()" class="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left text-gray-600 dark:text-gray-400">
+                <i class="fas fa-moon w-5" id="theme-icon"></i> <span id="theme-text">Modo Oscuro</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative bg-gray-50 dark:bg-dark-950 overflow-hidden">
+        
+        <!-- Modernized Top Bar -->
+        <header class="h-16 border-b border-gray-200/80 dark:border-gray-800/80 bg-white/80 dark:bg-dark-800/80 backdrop-blur-md flex items-center justify-between px-4 z-10 gap-3 shadow-sm">
+            <!-- Tabs Area -->
+            <div class="flex-1 flex items-center overflow-x-auto no-scrollbar gap-1.5 py-1" id="tabs-container">
+                <!-- Pestañas inyectadas por JS -->
+            </div>
+
+            <!-- Modern Quick Action Bar -->
+            <div class="flex items-center gap-2 shrink-0">
+                <!-- Quick Notes Drawer Button -->
+                <button onclick="app.openNotesDrawer()" class="relative flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 border border-amber-300/50 dark:border-amber-600/50 text-amber-700 dark:text-amber-300 transition-all shadow-sm">
+                    <i class="fas fa-sticky-note text-amber-500"></i>
+                    <span class="hidden md:inline">Notas</span>
+                    <span id="top-notes-count" class="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">0</span>
+                </button>
+
+                <!-- Calculator Toggle Button -->
+                <button onclick="app.toggleCalculator()" class="relative flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-500/10 hover:bg-teal-500/20 border border-teal-300/50 dark:border-teal-600/50 text-teal-700 dark:text-teal-300 transition-all shadow-sm">
+                    <i class="fas fa-calculator text-teal-500"></i>
+                    <span class="hidden md:inline">Calc</span>
+                </button>
+
+
+                <button onclick="app.checkFirebaseConnection()" id="firebase-status-btn" class="relative flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-gray-500/10 hover:bg-gray-500/20 border border-gray-300/50 dark:border-gray-600/50 text-gray-600 dark:text-gray-300 transition-all shadow-sm" title="Probar conexión con Firebase">
+                    <i id="firebase-status-icon" class="fas fa-circle text-gray-400 text-[9px]"></i>
+                    <span id="firebase-status-text" class="hidden md:inline">Firebase</span>
+                </button>
+
+                <!-- Global Search -->
+                <div class="relative group">
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-primary-500 text-xs"></i>
+                    <input type="text" id="global-search" placeholder="Buscar... (Ctrl+K)" 
+                        class="w-40 sm:w-56 bg-gray-100 dark:bg-dark-900 border border-transparent focus:border-primary-500 focus:bg-white dark:focus:bg-dark-800 rounded-xl pl-9 pr-3 py-1.5 text-xs outline-none transition-all placeholder-gray-400 text-gray-800 dark:text-gray-200">
+                </div>
+
+                <!-- Add Tool Button -->
+                <button onclick="app.openAddToolModal()" class="bg-primary-600 hover:bg-primary-700 text-white rounded-xl h-8 px-3 flex items-center gap-1.5 text-xs font-semibold transition-all shadow-md shadow-primary-500/20 active:scale-95" title="Agregar herramienta (Ctrl+N)">
+                    <i class="fas fa-plus"></i> <span class="hidden xl:inline">Nueva</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Views Container -->
+        <div id="views-container" class="flex-1 overflow-hidden relative">
+            
+            <!-- Home View -->
+            <div id="home-view" class="absolute inset-0 overflow-y-auto p-6 md:p-8 fade-in bg-cover bg-center bg-no-repeat bg-fixed">
+                <div id="home-bg-overlay" class="absolute inset-0 bg-white/50 dark:bg-dark-950/85 backdrop-blur-[6px] z-0 pointer-events-none transition-colors"></div>
+                <div class="max-w-7xl mx-auto relative z-10">
+                    <header class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                        <div>
+                            <h2 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight" id="greeting">Buenos días</h2>
+                            <p class="text-gray-500 text-sm mt-1" id="home-subtitle">⭐ Pantalla Principal - Solo tus Herramientas Favoritas</p>
+                        </div>
+                    </header>
+                    
+                    <div id="tools-grid-container">
+                        <!-- Grillas inyectadas por JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browser View (Single iframe & Split Multi-screen View) -->
+            <div id="browser-view" class="absolute inset-0 bg-gray-200 dark:bg-dark-950 flex flex-col hidden fade-in">
+                <!-- Browser Controls Header Bar -->
+                <div class="h-11 bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-gray-700/80 flex items-center px-3 gap-2 text-gray-600 dark:text-gray-300 shrink-0">
+                    <button onclick="app.showHome()" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs flex items-center gap-1 font-semibold" title="Volver al Inicio">
+                        <i class="fas fa-home text-indigo-500"></i> <span class="hidden sm:inline">Inicio</span>
+                    </button>
+                    <button onclick="app.browserAction('reload')" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs" title="Recargar página"><i class="fas fa-redo"></i></button>
+                    
+                    <!-- URL Address Display -->
+                    <div class="flex-1 bg-gray-100 dark:bg-dark-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1 text-xs mx-1 truncate font-mono text-gray-600 dark:text-gray-300" id="browser-url">
+                        https://...
+                    </div>
+                    
+                    <!-- Zoom Controls (For Single View) -->
+                    <div id="single-zoom-controls" class="flex items-center bg-gray-100 dark:bg-dark-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-0.5 gap-1 text-xs">
+                        <i class="fas fa-search-plus text-gray-400 text-[10px]"></i>
+                        <button onclick="app.zoom(-10)" class="px-1.5 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 font-bold">-</button>
+                        <span id="zoom-level" class="text-[11px] font-mono px-1 min-w-[36px] text-center font-semibold">100%</span>
+                        <button onclick="app.zoom(10)" class="px-1.5 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 font-bold">+</button>
+                        <button onclick="app.resetZoom()" class="px-1.5 py-0.5 text-[10px] text-gray-500 hover:text-primary-500 border-l border-gray-300 dark:border-gray-700" title="Restablecer Zoom">100%</button>
+                    </div>
+
+                    <!-- Split Mode Selector -->
+                    <div class="flex items-center bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700/50 rounded-lg overflow-hidden text-xs transition-colors">
+                        <span class="pl-2 text-indigo-500"><i class="fas fa-th-large"></i></span>
+                        <select id="split-layout-select" onchange="app.changeSplitLayout(this.value)" class="bg-transparent text-indigo-700 dark:text-indigo-300 py-1.5 px-2 outline-none cursor-pointer font-medium appearance-none">
+                            <option value="1" class="text-black font-bold">1 Pantalla</option>
+                            <option value="2" class="text-black font-bold">2 Pantallas</option>
+                            <option value="3" class="text-black font-bold">3 Pantallas</option>
+                            <option value="4" class="text-black font-bold">4 Pantallas</option>
+                            <option value="5" class="text-black font-bold">5 Pantallas</option>
+                            <option value="6" class="text-black font-bold">6 Pantallas</option>
+                            <option value="7" class="text-black font-bold">7 Pantallas</option>
+                            <option value="8" class="text-black font-bold">8 Pantallas</option>
+                        </select>
+                    </div>
+
+                    <button onclick="app.openExternal()" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs" title="Abrir en pestaña externa del navegador"><i class="fas fa-external-link-alt"></i></button>
+                </div>
+                
+                <!-- Containers for Single & Split View -->
+                <div id="iframes-container" class="flex-1 relative bg-gray-200 dark:bg-dark-950 p-1.5 overflow-hidden">
+                    <!-- Dynamic wrappers injected here -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Sticky Notes Slide-Over Drawer -->
+    <div id="notes-drawer" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-dark-800 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col border-l border-gray-200 dark:border-gray-700">
+        <!-- Drawer Header -->
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-amber-500/10 dark:bg-amber-500/5">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-sticky-note text-amber-500 text-lg"></i>
+                <h3 class="font-bold text-gray-900 dark:text-white text-base">Notas Rápidas Imprenta</h3>
+            </div>
+            <button onclick="app.closeNotesDrawer()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-lg"><i class="fas fa-times text-lg"></i></button>
+        </div>
+
+        <!-- Color Palette Quick Creator -->
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dark-900">
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">Crear nueva nota por color:</label>
+            <div class="flex items-center justify-between gap-2">
+                <button onclick="app.addNote('yellow')" title="Amarillo (Medidas/Papel)" class="w-8 h-8 rounded-full bg-yellow-300 dark:bg-yellow-600 border-2 border-yellow-400 hover:scale-110 transition-transform shadow-sm"></button>
+                <button onclick="app.addNote('blue')" title="Azul (Diseño/Colores)" class="w-8 h-8 rounded-full bg-blue-300 dark:bg-blue-600 border-2 border-blue-400 hover:scale-110 transition-transform shadow-sm"></button>
+                <button onclick="app.addNote('green')" title="Verde (Precios/Cotización)" class="w-8 h-8 rounded-full bg-emerald-300 dark:bg-emerald-600 border-2 border-emerald-400 hover:scale-110 transition-transform shadow-sm"></button>
+                <button onclick="app.addNote('pink')" title="Rosa (Urgentes)" class="w-8 h-8 rounded-full bg-pink-300 dark:bg-pink-600 border-2 border-pink-400 hover:scale-110 transition-transform shadow-sm"></button>
+                <button onclick="app.addNote('purple')" title="Púrpura (Clientes)" class="w-8 h-8 rounded-full bg-purple-300 dark:bg-purple-600 border-2 border-purple-400 hover:scale-110 transition-transform shadow-sm"></button>
+                <button onclick="app.addNote('orange')" title="Naranja (Proveedores)" class="w-8 h-8 rounded-full bg-orange-300 dark:bg-orange-600 border-2 border-orange-400 hover:scale-110 transition-transform shadow-sm"></button>
+            </div>
+        </div>
+
+        <!-- Notes Color Filters -->
+        <div class="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs">
+            <button onclick="app.filterNotesColor('all')" class="px-2.5 py-1 rounded-full border border-gray-300 dark:border-gray-600 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 shrink-0">Todas</button>
+            <button onclick="app.filterNotesColor('yellow')" class="px-2.5 py-1 rounded-full bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-200 font-medium shrink-0">🟡</button>
+            <button onclick="app.filterNotesColor('blue')" class="px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-200 font-medium shrink-0">🔵</button>
+            <button onclick="app.filterNotesColor('green')" class="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 font-medium shrink-0">🟢</button>
+            <button onclick="app.filterNotesColor('pink')" class="px-2.5 py-1 rounded-full bg-pink-100 dark:bg-pink-950 text-pink-800 dark:text-pink-200 font-medium shrink-0">🩷</button>
+            <button onclick="app.filterNotesColor('purple')" class="px-2.5 py-1 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 font-medium shrink-0">🟣</button>
+            <button onclick="app.filterNotesColor('orange')" class="px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-200 font-medium shrink-0">🟠</button>
+        </div>
+
+        <!-- Notes List Scroll Container -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-3" id="notes-list-container">
+            <!-- Notes inyectadas dinámicamente -->
+        </div>
+    </div>
+
+    <!-- Add/Edit Tool Modal -->
+    <div id="tool-modal" class="fixed inset-0 bg-black/60 glass hidden items-center justify-center z-50 transition-opacity opacity-0 p-4">
+        <div class="bg-white dark:bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md transform scale-95 transition-transform border border-gray-200 dark:border-gray-700" id="tool-modal-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold" id="tool-modal-title">Agregar Herramienta</h3>
+                <button onclick="app.closeModal('tool-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="hidden" id="tool-id">
+                
+                <div class="flex gap-4">
+                    <div class="w-16">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Icono</label>
+                        <input type="text" id="tool-icon" placeholder="🪪" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-center text-xl focus:border-primary-500 outline-none">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Nombre</label>
+                        <input type="text" id="tool-name" placeholder="Ej: Redimensionar DNI" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:border-primary-500 outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Descripción</label>
+                    <input type="text" id="tool-desc" placeholder="Prepara fotografías para imprimir..." class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:border-primary-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">URL o Ruta Local</label>
+                    <input type="text" id="tool-url" placeholder="https://..." class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 focus:border-primary-500 outline-none font-mono text-xs">
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Categoría</label>
+                        <select id="tool-category" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:border-primary-500 outline-none">
+                            <!-- Inyectado por JS -->
+                        </select>
+                    </div>
+                    <div class="flex items-center pt-5">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="tool-favorite" class="sr-only peer">
+                            <div class="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-400"></div>
+                            <span class="ml-2 text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center gap-1"><i class="fas fa-star text-yellow-400"></i> Favorito</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-gray-200 dark:border-gray-700 flex flex-col gap-2">
+                    <label class="flex items-center cursor-pointer w-max">
+                        <input type="checkbox" id="tool-is-encrypted" class="sr-only peer" onchange="document.getElementById('tool-password-container').classList.toggle('hidden', !this.checked)">
+                        <div class="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-red-500"></div>
+                        <span class="ml-2 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-1"><i class="fas fa-lock"></i> Cifrar con Contraseña</span>
+                    </label>
+                    <div id="tool-password-container" class="hidden mt-1">
+                        <input type="password" id="tool-password" placeholder="Escribe la contraseña de seguridad..." class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:border-red-500 outline-none">
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                <button onclick="app.closeModal('tool-modal')" class="px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancelar</button>
+                <button onclick="app.saveTool()" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-semibold transition-colors">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Management Modal -->
+    <div id="category-modal" class="fixed inset-0 bg-black/60 glass hidden items-center justify-center z-50 transition-opacity opacity-0 p-4">
+        <div class="bg-white dark:bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md transform scale-95 transition-transform border border-gray-200 dark:border-gray-700" id="category-modal-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold">Gestionar Categorías</h3>
+                <button onclick="app.closeModal('category-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="flex gap-2">
+                    <input type="text" id="new-cat-icon" placeholder="❤️" class="w-12 bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-2 py-1.5 text-center text-lg outline-none">
+                    <input type="text" id="new-cat-name" placeholder="Nueva Categoría" class="flex-1 bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-1.5 text-sm outline-none">
+                    <button onclick="app.addCategory()" class="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors">Añadir</button>
+                </div>
+                <div class="max-h-60 overflow-y-auto space-y-2" id="categories-list-manage">
+                    <!-- Category items list -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config/Backup Modal -->
+    <div id="config-modal" class="fixed inset-0 bg-black/60 glass hidden items-center justify-center z-50 transition-opacity opacity-0 p-4">
+                <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Firebase</h4>
+                    <div class="space-y-2">
+                        <input id="firebase-api-key" type="text" placeholder="API Key" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <input id="firebase-auth-domain" type="text" placeholder="Auth Domain" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <input id="firebase-project-id" type="text" placeholder="Project ID" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <input id="firebase-database-url" type="text" placeholder="Database URL" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <input id="firebase-storage-bucket" type="text" placeholder="Storage Bucket" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <input id="firebase-messaging-sender-id" type="text" placeholder="Messaging Sender ID" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <input id="firebase-app-id" type="text" placeholder="App ID" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <input id="firebase-measurement-id" type="text" placeholder="Measurement ID" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none">
+                        <div class="flex gap-2">
+                            <button onclick="app.saveFirebaseConfig()" class="flex-1 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold">Guardar credenciales</button>
+                            <button onclick="app.checkFirebaseConnection()" class="flex-1 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 text-xs font-semibold">Probar conexión</button>
+                        </div>
+                    </div>
+                </div>
+
+        <div class="bg-white dark:bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md transform scale-95 transition-transform border border-gray-200 dark:border-gray-700" id="config-modal-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold">Configuración y Respaldos</h3>
+                <button onclick="app.closeModal('config-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Copia de Seguridad</h4>
+                    <p class="text-xs text-gray-500 mb-3">Exporta o importa tus herramientas, categorías y notas rápidas.</p>
+                    <div class="flex gap-3">
+                        <button onclick="app.exportData()" class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                            <i class="fas fa-download"></i> Exportar JSON
+                        </button>
+                        <label class="flex-1 px-4 py-2 bg-gray-100 dark:bg-dark-900 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700">
+                            <i class="fas fa-upload"></i> Importar
+                            <input type="file" accept=".json" onchange="app.importData(event)" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Apariencia y Calculadora</h4>
+                    <div class="space-y-3">
+                        
+                        <!-- Main Background -->
+                        <div class="bg-gray-50 dark:bg-dark-900/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Fondo Principal</label>
+                                <select id="config-home-bg-type" onchange="app.toggleBgInputs('home')" class="bg-white dark:bg-dark-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] px-1 py-0.5 outline-none font-medium">
+                                    <option value="image">Imagen URL</option>
+                                    <option value="color">Color Sólido</option>
+                                </select>
+                            </div>
+                            
+                            <div id="config-home-image-group">
+                                <input type="text" id="config-home-bg" placeholder="URL de la imagen..." class="w-full bg-white dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary-500 transition-colors mb-2">
+                                <div class="flex flex-col gap-1.5 px-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] text-gray-400 w-12">Opacidad:</span>
+                                        <input type="range" id="config-home-opacity" min="0" max="100" oninput="document.getElementById('config-home-opacity-val').innerText = this.value + '%'" class="flex-1 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        <span id="config-home-opacity-val" class="text-[10px] font-mono text-gray-500 w-8 text-right">50%</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] text-gray-400 w-12" title="Nivel de desenfoque/distorsión">Desenfoque:</span>
+                                        <input type="range" id="config-home-blur" min="0" max="25" oninput="document.getElementById('config-home-blur-val').innerText = this.value + 'px'" class="flex-1 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        <span id="config-home-blur-val" class="text-[10px] font-mono text-gray-500 w-8 text-right">6px</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="config-home-color-group" class="hidden flex items-center gap-3 mt-1">
+                                <input type="color" id="config-home-color" class="h-8 w-14 cursor-pointer bg-transparent border-0 rounded">
+                                <span class="text-[11px] text-gray-500">Selecciona el color de fondo</span>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar Background -->
+                        <div class="bg-gray-50 dark:bg-dark-900/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Menú Lateral</label>
+                                <select id="config-sidebar-bg-type" onchange="app.toggleBgInputs('sidebar')" class="bg-white dark:bg-dark-800 border border-gray-300 dark:border-gray-600 rounded text-[10px] px-1 py-0.5 outline-none font-medium">
+                                    <option value="image">Imagen URL</option>
+                                    <option value="color">Color Sólido</option>
+                                </select>
+                            </div>
+                            
+                            <div id="config-sidebar-image-group">
+                                <input type="text" id="config-sidebar-bg" placeholder="URL del fondo..." class="w-full bg-white dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary-500 transition-colors mb-2">
+                                <div class="flex flex-col gap-1.5 px-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] text-gray-400 w-12">Opacidad:</span>
+                                        <input type="range" id="config-sidebar-opacity" min="0" max="100" oninput="document.getElementById('config-sidebar-opacity-val').innerText = this.value + '%'" class="flex-1 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        <span id="config-sidebar-opacity-val" class="text-[10px] font-mono text-gray-500 w-8 text-right">80%</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] text-gray-400 w-12" title="Nivel de desenfoque/distorsión">Desenfoque:</span>
+                                        <input type="range" id="config-sidebar-blur" min="0" max="25" oninput="document.getElementById('config-sidebar-blur-val').innerText = this.value + 'px'" class="flex-1 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        <span id="config-sidebar-blur-val" class="text-[10px] font-mono text-gray-500 w-8 text-right">4px</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="config-sidebar-color-group" class="hidden flex items-center gap-3 mt-1">
+                                <input type="color" id="config-sidebar-color" class="h-8 w-14 cursor-pointer bg-transparent border-0 rounded">
+                                <span class="text-[11px] text-gray-500">Selecciona el color de fondo</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Calculadora (URL Externa)</label>
+                            <input type="text" id="config-calc-url" placeholder="Ej: https://mi-calculadora.com" class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-primary-500 transition-colors">
+                        </div>
+                        
+                        <button onclick="app.saveAdvancedConfig()" class="w-full bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-colors mt-2 shadow-md">Guardar Ajustes</button>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Restablecer</h4>
+                    <button onclick="app.resetDataWithConfirm()" class="w-full px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-undo"></i> Restablecer datos por defecto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast glass px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-gray-200 dark:border-gray-700">
+        <i class="fas fa-info-circle text-primary-500" id="toast-icon"></i>
+        <span class="text-sm font-medium" id="toast-msg">Mensaje</span>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" class="fixed bg-white dark:bg-dark-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-1.5 w-48 hidden z-50 text-sm">
+        <button onclick="app.cmAction('open')" class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i class="fas fa-external-link-alt w-4"></i> Abrir en pestaña</button>
+        <button onclick="app.cmAction('edit')" class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i class="fas fa-pen w-4"></i> Editar</button>
+        <button onclick="app.cmAction('fav')" class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i class="fas fa-star w-4"></i> Fav / Desmarcar</button>
+        <button onclick="app.cmAction('copy')" class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i class="fas fa-copy w-4"></i> Copiar URL</button>
+        <div class="h-px bg-gray-200 dark:bg-gray-700 my-1"></div>
+        <button onclick="app.cmAction('delete')" class="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2"><i class="fas fa-trash w-4"></i> Eliminar</button>
+    </div>
+
+    <!-- Password Prompt Modal -->
+    <div id="password-modal" class="fixed inset-0 bg-black/80 glass hidden items-center justify-center z-[100] transition-opacity opacity-0 p-4">
+        <div class="bg-white dark:bg-dark-800 rounded-2xl shadow-2xl w-full max-w-sm transform scale-95 transition-transform border border-red-200 dark:border-red-900/50" id="password-modal-content">
+            <div class="p-6 text-center">
+                <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-3xl shadow-inner">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Aplicación Cifrada</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6" id="password-modal-desc">Ingresa la contraseña para acceder.</p>
+                
+                <input type="password" id="unlock-password" placeholder="Contraseña..." class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-3 text-center mb-4 focus:border-red-500 outline-none font-bold tracking-widest text-lg transition-colors">
+                <p id="password-error" class="text-red-500 text-xs mb-4 hidden font-semibold">Contraseña incorrecta. Intenta de nuevo.</p>
+
+                <div class="flex gap-3">
+                    <button onclick="app.cancelPasswordPrompt()" class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-200">Cancelar</button>
+                    <button onclick="app.submitPassword()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-md shadow-red-500/30">Desbloquear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calculator Floating Window -->
+    <div id="floating-calc" class="fixed bottom-6 right-6 w-72 bg-white dark:bg-dark-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 hidden z-[60] flex-col overflow-hidden transition-opacity opacity-0 shadow-[0_15px_50px_-12px_rgba(0,0,0,0.5)]">
+        <div id="calc-header" class="bg-gray-100 dark:bg-dark-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between cursor-move select-none active:bg-gray-200 dark:active:bg-dark-800">
+            <span class="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2"><i class="fas fa-calculator text-teal-500"></i> Calculadora</span>
+            <button onclick="app.toggleCalculator()" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fas fa-times text-sm"></i></button>
+        </div>
+        <div id="calc-body" class="h-96 flex flex-col relative bg-gray-50 dark:bg-dark-950 p-0">
+           <!-- Content injected by JS -->
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT_CATEGORIES = [
+            { id: 'cat_ilove', name: 'ILOVE', icon: '❤️' },
+            { id: 'cat_ia', name: 'IA & Asistentes', icon: '🤖' },
+            { id: 'cat_diseno', name: 'Diseño & Gráficos', icon: '🎨' },
+            { id: 'cat_fotos', name: 'Fotografías', icon: '📷' },
+            { id: 'cat_doc', name: 'Documentos', icon: '📄' },
+            { id: 'cat_print', name: 'Impresión', icon: '🖨️' },
+            { id: 'cat_tools', name: 'Herramientas', icon: '🛠️' }
+        ];
+
+        const DEFAULT_TOOLS = [
+            { id: 't_ilovepdf', name: 'iLovePDF', desc: 'Herramientas online para amantes de los PDF', url: 'https://www.ilovepdf.com/es', category: 'cat_ilove', icon: '❤️', favorite: true, lastUsed: Date.now(), order: 0 },
+            { id: 't_iloveimg', name: 'iLoveIMG', desc: 'Edición y modificación de imágenes online', url: 'https://www.iloveimg.com/es', category: 'cat_ilove', icon: '🖼️', favorite: true, lastUsed: Date.now(), order: 1 },
+            { id: 't_unir_pdf', name: 'Unir PDF', desc: 'Unir múltiples archivos PDF en uno solo', url: 'https://www.ilovepdf.com/es/unir_pdf', category: 'cat_ilove', icon: '🧩', favorite: false, lastUsed: 0, order: 2 },
+            { id: 't_dividir_pdf', name: 'Dividir PDF', desc: 'Separar páginas de un archivo PDF', url: 'https://www.ilovepdf.com/es/dividir_pdf', category: 'cat_ilove', icon: '✂️', favorite: false, lastUsed: 0, order: 3 },
+            { id: 't_comprimir_pdf', name: 'Comprimir PDF', desc: 'Reducir tamaño manteniendo máxima calidad', url: 'https://www.ilovepdf.com/es/comprimir_pdf', category: 'cat_ilove', icon: '🗜️', favorite: false, lastUsed: 0, order: 4 },
+            { id: 't_eliminar_fondo', name: 'Eliminar fondo', desc: 'Quitar fondo de imágenes automáticamente', url: 'https://www.iloveimg.com/es/eliminar-fondo', category: 'cat_ilove', icon: '🪄', favorite: true, lastUsed: 0, order: 35 },
+            { id: 't_chatgpt', name: 'ChatGPT', desc: 'Asistente de Inteligencia Artificial para textos y consultas', url: 'https://chatgpt.com', category: 'cat_ia', icon: '🤖', favorite: true, lastUsed: Date.now(), order: 37 },
+            { id: 't_gemini', name: 'Google Gemini', desc: 'Modelo de Inteligencia Artificial multimodal de Google', url: 'https://gemini.google.com', category: 'cat_ia', icon: '✨', favorite: true, lastUsed: Date.now(), order: 38 },
+            { id: 't_deepseek', name: 'DeepSeek', desc: 'Plataforma de Inteligencia Artificial avanzada', url: 'https://chat.deepseek.com', category: 'cat_ia', icon: '🐳', favorite: true, lastUsed: Date.now(), order: 39 },
+            { id: 't_canva', name: 'Canva', desc: 'Diseño gráfico para banners, volantes y post', url: 'https://www.canva.com', category: 'cat_diseno', icon: '🎨', favorite: true, lastUsed: Date.now(), order: 44 },
+            { id: 't_photopea', name: 'Redimensionar DNI / Photopea', desc: 'Prepara fotografías tamaño DNI y edición tipo Photoshop web', url: 'https://www.photopea.com/', category: 'cat_fotos', icon: '🪪', favorite: true, lastUsed: Date.now(), order: 45 }
+        ];
+
+        const DEFAULT_NOTES = [
+            { id: 'n_1', title: 'Medidas DNI Impresión', content: 'Tamaño Estándar: 8.5 cm x 5.4 cm\nFormato hoja 10x15 cm entran 4 fotos.', color: 'yellow', date: Date.now() },
+            { id: 'n_2', title: 'Premios Tarjetas 1000u', content: 'Propalcote 300g con Brillo UV:\n2 caras: $60.000 / 1 cara: $45.000', color: 'green', date: Date.now() - 10000 },
+            { id: 'n_3', title: 'Modo de Color Imprenta', content: 'Convertir siempre de RGB a CMYK en exportaciones de Illustrator o Photopea.', color: 'blue', date: Date.now() - 20000 }
+        ];
+
+        class App {
+            constructor() {
+                this.db = { tools: [], categories: [], notes: [], settings: { theme: 'dark', splitCount: 1, calcUrl: '' } };
+                this.state = {
+                    activeTabs: [],
+                    currentTab: null,
+                    filter: '',
+                    categoryFilter: null,
+                    contextMenuTarget: null,
+                    tabZoom: {},
+                    notesFilterColor: 'all',
+                    pendingToolId: null,
+                    unlockedTools: []
+                };
+                
+                this.init();
+            }
+
+            init() {
+                this.loadData();
+                this.applyTheme();
+                this.applyBackgrounds();
+                this.setupEventListeners();
+                this.makeDraggable(document.getElementById('floating-calc'), document.getElementById('calc-header'));
+                this.renderCategoriesSidebar();
+                this.renderHome();
+                this.renderTabs();
+                this.renderNotes();
+                this.updateGreeting();
+            }
+
+            loadData() {
+                const stored = localStorage.getItem('imprenta_db');
+                if (stored) {
+                    try {
+                        this.db = JSON.parse(stored);
+                        if (!this.db.tools || this.db.tools.length === 0) this.db.tools = DEFAULT_TOOLS;
+                        if (!this.db.categories || this.db.categories.length === 0) this.db.categories = DEFAULT_CATEGORIES;
+                        if (!this.db.notes) this.db.notes = DEFAULT_NOTES;
+                        if (!this.db.settings) this.db.settings = { theme: 'dark', splitCount: 1, calcUrl: '' };
+                        if (!this.db.settings.splitCount) this.db.settings.splitCount = 1;
+                        if (typeof this.db.settings.homeBgUrl === 'undefined') this.db.settings.homeBgUrl = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
+                        if (typeof this.db.settings.sidebarBgUrl === 'undefined') this.db.settings.sidebarBgUrl = '';
+                        if (typeof this.db.settings.homeBgOpacity === 'undefined') this.db.settings.homeBgOpacity = 50;
+                        if (typeof this.db.settings.sidebarBgOpacity === 'undefined') this.db.settings.sidebarBgOpacity = 80;
+                        
+                        if (typeof this.db.settings.homeBgType === 'undefined') this.db.settings.homeBgType = 'image';
+                        if (typeof this.db.settings.homeBgColor === 'undefined') this.db.settings.homeBgColor = '#1e293b';
+                        if (typeof this.db.settings.homeBgBlur === 'undefined') this.db.settings.homeBgBlur = 6;
+                        if (typeof this.db.settings.sidebarBgType === 'undefined') this.db.settings.sidebarBgType = 'image';
+                        if (typeof this.db.settings.sidebarBgColor === 'undefined') this.db.settings.sidebarBgColor = '#ffffff';
+                        if (typeof this.db.settings.sidebarBgBlur === 'undefined') this.db.settings.sidebarBgBlur = 4;
+                    } catch (e) {
+                        this.resetDB();
+                    }
+                } else {
+                    this.resetDB();
+                }
+            }
+
+            saveData() {
+                localStorage.setItem('imprenta_db', JSON.stringify(this.db));
+            }
+
+            resetDB() {
+                this.db = {
+                    tools: DEFAULT_TOOLS,
+                    categories: DEFAULT_CATEGORIES,
+                    notes: DEFAULT_NOTES,
+                    settings: { 
+                        theme: 'dark', 
+                        splitCount: 1, 
+                        calcUrl: '',
+                        homeBgUrl: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop',
+                        sidebarBgUrl: '',
+                        homeBgOpacity: 50,
+                        sidebarBgOpacity: 80,
+                        homeBgType: 'image',
+                        homeBgColor: '#1e293b',
+                        homeBgBlur: 6,
+                        sidebarBgType: 'image',
+                        sidebarBgColor: '#ffffff',
+                        sidebarBgBlur: 4
+                    }
+                };
+                this.saveData();
+            }
+
+            resetDataWithConfirm() {
+                this.resetDB();
+                this.init();
+                this.closeModal('config-modal');
+                this.showToast('Datos restablecidos por defecto');
+            }
+
+            applyTheme() {
+                const isDark = this.db.settings.theme === 'dark';
+                if (isDark) {
+                    document.documentElement.classList.add('dark');
+                    document.getElementById('theme-icon').className = 'fas fa-sun w-5 text-yellow-400';
+                    document.getElementById('theme-text').innerText = 'Modo Claro';
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    document.getElementById('theme-icon').className = 'fas fa-moon w-5';
+                    document.getElementById('theme-text').innerText = 'Modo Oscuro';
+                }
+            }
+
+            applyBackgrounds() {
+                const homeView = document.getElementById('home-view');
+                const homeOverlay = document.getElementById('home-bg-overlay');
+                const isDark = document.documentElement.classList.contains('dark');
+                
+                if (this.db.settings.homeBgType === 'color') {
+                    homeView.style.backgroundImage = 'none';
+                    homeView.style.backgroundColor = this.db.settings.homeBgColor || (isDark ? '#020617' : '#f3f4f6');
+                    homeOverlay.style.backgroundColor = 'transparent';
+                    homeOverlay.style.backdropFilter = 'none';
+                    homeOverlay.style.webkitBackdropFilter = 'none';
+                } else {
+                    homeView.style.backgroundColor = '';
+                    if (this.db.settings.homeBgUrl) {
+                        homeView.style.backgroundImage = `url('${this.db.settings.homeBgUrl}')`;
+                        const op = this.db.settings.homeBgOpacity !== undefined ? this.db.settings.homeBgOpacity / 100 : (isDark ? 0.85 : 0.5);
+                        const blur = this.db.settings.homeBgBlur !== undefined ? this.db.settings.homeBgBlur : 6;
+                        homeOverlay.style.backgroundColor = isDark ? `rgba(2, 6, 23, ${op})` : `rgba(255, 255, 255, ${op})`;
+                        homeOverlay.style.backdropFilter = `blur(${blur}px)`;
+                        homeOverlay.style.webkitBackdropFilter = `blur(${blur}px)`;
+                    } else {
+                        homeView.style.backgroundImage = 'none';
+                        homeOverlay.style.backgroundColor = '';
+                        homeOverlay.style.backdropFilter = 'none';
+                        homeOverlay.style.webkitBackdropFilter = 'none';
+                    }
+                }
+
+                const sidebar = document.getElementById('sidebar');
+                const sidebarOverlay = document.getElementById('sidebar-bg-overlay');
+                
+                if (this.db.settings.sidebarBgType === 'color') {
+                    sidebar.style.backgroundImage = 'none';
+                    sidebar.style.backgroundColor = this.db.settings.sidebarBgColor || (isDark ? '#1e293b' : '#ffffff');
+                    sidebarOverlay.classList.add('hidden');
+                } else {
+                    sidebar.style.backgroundColor = '';
+                    if (this.db.settings.sidebarBgUrl) {
+                        sidebar.style.backgroundImage = `url('${this.db.settings.sidebarBgUrl}')`;
+                        sidebarOverlay.classList.remove('hidden');
+                        const op = this.db.settings.sidebarBgOpacity !== undefined ? this.db.settings.sidebarBgOpacity / 100 : (isDark ? 0.9 : 0.8);
+                        const blur = this.db.settings.sidebarBgBlur !== undefined ? this.db.settings.sidebarBgBlur : 4;
+                        sidebarOverlay.style.backgroundColor = isDark ? `rgba(30, 41, 59, ${op})` : `rgba(255, 255, 255, ${op})`;
+                        sidebarOverlay.style.backdropFilter = `blur(${blur}px)`;
+                        sidebarOverlay.style.webkitBackdropFilter = `blur(${blur}px)`;
+                    } else {
+                        sidebar.style.backgroundImage = 'none';
+                        sidebarOverlay.classList.add('hidden');
+                        sidebarOverlay.style.backgroundColor = '';
+                        sidebarOverlay.style.backdropFilter = 'none';
+                        sidebarOverlay.style.webkitBackdropFilter = 'none';
+                    }
+                }
+            }
+
+            toggleTheme() {
+                this.db.settings.theme = this.db.settings.theme === 'dark' ? 'light' : 'dark';
+                this.saveData();
+                this.applyTheme();
+                this.applyBackgrounds();
+            }
+
+            setupEventListeners() {
+                const searchInput = document.getElementById('global-search');
+                searchInput.addEventListener('input', (e) => {
+                    this.state.filter = e.target.value.toLowerCase().trim();
+                    this.showHome();
+                    this.renderHome();
+                });
+
+                window.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        if (e.key === 'k' || e.key === 'K') {
+                            e.preventDefault();
+                            searchInput.focus();
+                        } else if (e.key === 'n' || e.key === 'N') {
+                            e.preventDefault();
+                            this.openAddToolModal();
+                        } else if (e.key === 'w' || e.key === 'W') {
+                            e.preventDefault();
+                            if (this.state.currentTab) this.closeTab(this.state.currentTab);
+                        }
+                    }
+                });
+
+                // Context Menu closing behavior
+                document.addEventListener('click', (e) => {
+                    const cm = document.getElementById('context-menu');
+                    if (!cm.contains(e.target) && !e.target.closest('.tool-card')) {
+                        cm.classList.add('hidden');
+                    }
+                });
+
+                // Set initial select value
+                document.getElementById('split-layout-select').value = this.db.settings.splitCount || 1;
+            }
+
+            updateGreeting() {
+                const hour = new Date().getHours();
+                const el = document.getElementById('greeting');
+                if (hour < 12) el.innerText = 'Buenos días';
+                else if (hour < 18) el.innerText = 'Buenas tardes';
+                else el.innerText = 'Buenas noches';
+            }
+
+            showToast(msg, type = 'info') {
+                const toast = document.getElementById('toast');
+                document.getElementById('toast-msg').innerText = msg;
+                const icon = document.getElementById('toast-icon');
+                icon.className = type === 'success' ? 'fas fa-check-circle text-green-500' : 'fas fa-info-circle text-primary-500';
+                
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 3000);
+            }
+
+            closeModal(id) {
+                const modal = document.getElementById(id);
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+                modal.classList.remove('opacity-100');
+                modal.classList.add('opacity-0');
+            }
+
+            openModal(id) {
+                const modal = document.getElementById(id);
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    modal.classList.add('opacity-100');
+                }, 10);
+            }
+
+            showHome() {
+                document.getElementById('home-view').classList.remove('hidden');
+                document.getElementById('browser-view').classList.add('hidden');
+                this.state.currentTab = null;
+                this.renderTabs();
+                this.renderHome();
+                
+                document.querySelectorAll('#categories-nav button, nav button').forEach(b => {
+                    b.classList.remove('bg-gray-100', 'dark:bg-gray-800/60');
+                });
+                
+                const activeNav = this.state.categoryFilter === 'all' ? 'nav-all' : 
+                                  this.state.categoryFilter === 'favorites' ? 'nav-favorites' :
+                                  this.state.categoryFilter === 'recent' ? 'nav-recent' :
+                                  this.state.categoryFilter ? `cat-nav-${this.state.categoryFilter}` : 'nav-home';
+                
+                const navEl = document.getElementById(activeNav);
+                if (navEl) navEl.classList.add('bg-gray-100', 'dark:bg-gray-800/60');
+            }
+
+            filterCategory(cat) {
+                this.state.categoryFilter = cat;
+                this.showHome();
+            }
+
+            renderCategoriesSidebar() {
+                const container = document.getElementById('categories-nav');
+                container.innerHTML = '';
+                this.db.categories.forEach(cat => {
+                    const btn = document.createElement('button');
+                    btn.id = `cat-nav-${cat.id}`;
+                    btn.className = `w-full flex items-center gap-3 px-3 py-2 text-sm rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-all text-left truncate ${this.state.categoryFilter === cat.id ? 'bg-gray-100 dark:bg-gray-800/60' : ''}`;
+                    btn.onclick = () => this.filterCategory(cat.id);
+                    btn.innerHTML = `<span class="w-5 text-center">${cat.icon}</span> <span class="truncate">${cat.name}</span>`;
+                    container.appendChild(btn);
+                });
+                
+                const manageList = document.getElementById('categories-list-manage');
+                if (manageList) {
+                    manageList.innerHTML = '';
+                    this.db.categories.forEach(cat => {
+                        manageList.innerHTML += `
+                            <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-dark-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center gap-2">
+                                    <span>${cat.icon}</span> <span>${cat.name}</span>
+                                </div>
+                                <button onclick="app.deleteCategory('${cat.id}')" class="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 p-1.5 rounded-lg"><i class="fas fa-trash text-xs"></i></button>
+                            </div>
+                        `;
+                    });
+                }
+            }
+
+            renderHome() {
+                const container = document.getElementById('tools-grid-container');
+                container.innerHTML = '';
+                
+                let tools = [...this.db.tools];
+                
+                if (this.state.filter) {
+                    tools = tools.filter(t => t.name.toLowerCase().includes(this.state.filter) || t.desc.toLowerCase().includes(this.state.filter));
+                    document.getElementById('home-subtitle').innerText = `🔍 Resultados de búsqueda para: "${this.state.filter}"`;
+                } else if (this.state.categoryFilter === 'all') {
+                    document.getElementById('home-subtitle').innerText = '📚 Todas las herramientas disponibles';
+                } else if (this.state.categoryFilter === 'favorites') {
+                    tools = tools.filter(t => t.favorite);
+                    document.getElementById('home-subtitle').innerText = '⭐ Tus herramientas favoritas';
+                } else if (this.state.categoryFilter === 'recent') {
+                    tools = tools.filter(t => t.lastUsed > 0).sort((a,b) => b.lastUsed - a.lastUsed);
+                    document.getElementById('home-subtitle').innerText = '🕒 Usadas recientemente';
+                } else if (this.state.categoryFilter) {
+                    tools = tools.filter(t => t.category === this.state.categoryFilter);
+                    const cat = this.db.categories.find(c => c.id === this.state.categoryFilter);
+                    document.getElementById('home-subtitle').innerText = `${cat ? cat.icon : ''} Categoría: ${cat ? cat.name : ''}`;
+                } else {
+                    tools = tools.filter(t => t.favorite);
+                    document.getElementById('home-subtitle').innerText = '⭐ Pantalla Principal - Solo tus Herramientas Favoritas';
+                }
+
+                if (tools.length === 0) {
+                    container.innerHTML = `<div class="text-center py-20"><i class="fas fa-folder-open text-4xl text-gray-300 dark:text-gray-700 mb-4"></i><p class="text-gray-500">No se encontraron herramientas aquí.</p></div>`;
+                    return;
+                }
+
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6';
+
+                tools.sort((a,b) => (a.order || 0) - (b.order || 0)).forEach(tool => {
+                    const card = document.createElement('div');
+                    card.className = 'tool-card group relative bg-white/90 dark:bg-dark-800/90 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-2xl p-4 cursor-pointer overflow-hidden shadow-sm hover:border-primary-300 dark:hover:border-primary-700';
+                    card.onclick = (e) => {
+                        if(!e.target.closest('button')) this.openTool(tool.id);
+                    };
+                    card.oncontextmenu = (e) => {
+                        e.preventDefault();
+                        this.showContextMenu(e, tool.id);
+                    };
+
+                    card.innerHTML = `
+                        <div class="absolute top-3 right-3 flex gap-1">
+                            ${tool.isEncrypted ? '<i class="fas fa-lock text-red-500 text-xs"></i>' : ''}
+                            <button onclick="app.toggleFavorite('${tool.id}', event)" class="text-gray-300 dark:text-gray-600 hover:text-yellow-400 dark:hover:text-yellow-400 transition-colors z-10">
+                                <i class="fas fa-star ${tool.favorite ? 'text-yellow-400' : ''}"></i>
+                            </button>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-gray-50 dark:bg-dark-900 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-2xl mb-3 shadow-inner group-hover:scale-110 transition-transform">
+                            ${tool.icon}
+                        </div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-1 line-clamp-1 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">${tool.name}</h4>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">${tool.desc}</p>
+                    `;
+                    grid.appendChild(card);
+                });
+
+                container.appendChild(grid);
+            }
+
+            showContextMenu(e, toolId) {
+                this.state.contextMenuTarget = toolId;
+                const cm = document.getElementById('context-menu');
+                cm.classList.remove('hidden');
+                
+                let x = e.clientX;
+                let y = e.clientY;
+                if (x + cm.offsetWidth > window.innerWidth) x = window.innerWidth - cm.offsetWidth - 10;
+                if (y + cm.offsetHeight > window.innerHeight) y = window.innerHeight - cm.offsetHeight - 10;
+                
+                cm.style.left = `${x}px`;
+                cm.style.top = `${y}px`;
+            }
+
+            cmAction(action) {
+                const id = this.state.contextMenuTarget;
+                if (!id) return;
+                const tool = this.db.tools.find(t => t.id === id);
+                if (!tool) return;
+
+                document.getElementById('context-menu').classList.add('hidden');
+
+                if (action === 'open') {
+                    window.open(tool.url, '_blank');
+                } else if (action === 'edit') {
+                    this.openEditToolModal(id);
+                } else if (action === 'fav') {
+                    this.toggleFavorite(id);
+                } else if (action === 'copy') {
+                    navigator.clipboard.writeText(tool.url);
+                    this.showToast('URL copiada al portapapeles', 'success');
+                } else if (action === 'delete') {
+                    if (confirm(`¿Eliminar ${tool.name}?`)) {
+                        this.db.tools = this.db.tools.filter(t => t.id !== id);
+                        this.saveData();
+                        this.renderHome();
+                        this.showToast('Herramienta eliminada');
+                    }
+                }
+            }
+            toggleFavorite(id, event = null) {
+                if (event) event.stopPropagation();
+                const tool = this.db.tools.find(t => t.id === id);
+                if (tool) {
+                    tool.favorite = !tool.favorite;
+                    this.saveData();
+                    this.renderHome();
+                }
+            }
+
+            openTool(id) {
+                const tool = this.db.tools.find(t => t.id === id);
+                if (!tool) return;
+
+                if (tool.isEncrypted && !this.state.unlockedTools.includes(tool.id)) {
+                    this.state.pendingToolId = tool.id;
+                    document.getElementById('password-error').classList.add('hidden');
+                    document.getElementById('unlock-password').value = '';
+                    this.openModal('password-modal');
+                    setTimeout(() => document.getElementById('unlock-password').focus(), 100);
+                    return;
+                }
+
+                tool.lastUsed = Date.now();
+                this.saveData();
+
+                if (!this.state.activeTabs.find(t => t.id === id)) {
+                    this.state.activeTabs.push(tool);
+                    this.state.tabZoom[id] = 100;
+                }
+                
+                this.switchTab(id);
+            }
+
+            submitPassword() {
+                const input = document.getElementById('unlock-password').value;
+                const tool = this.db.tools.find(t => t.id === this.state.pendingToolId);
+                
+                if (tool && tool.password === input) {
+                    this.state.unlockedTools.push(tool.id);
+                    this.closeModal('password-modal');
+                    this.openTool(tool.id);
+                } else {
+                    document.getElementById('password-error').classList.remove('hidden');
+                }
+            }
+
+            cancelPasswordPrompt() {
+                this.state.pendingToolId = null;
+                this.closeModal('password-modal');
+            }
+
+            switchTab(id) {
+                this.state.currentTab = id;
+                document.getElementById('home-view').classList.add('hidden');
+                document.getElementById('browser-view').classList.remove('hidden');
+                this.renderTabs();
+                this.renderIframes();
+                
+                document.querySelectorAll('#categories-nav button, nav button').forEach(b => {
+                    b.classList.remove('bg-gray-100', 'dark:bg-gray-800/60');
+                });
+            }
+
+            closeTab(id, event = null) {
+                if (event) event.stopPropagation();
+                this.state.activeTabs = this.state.activeTabs.filter(t => t.id !== id);
+                if (this.state.currentTab === id) {
+                    if (this.state.activeTabs.length > 0) {
+                        this.switchTab(this.state.activeTabs[this.state.activeTabs.length - 1].id);
+                    } else {
+                        this.showHome();
+                    }
+                } else {
+                    this.renderTabs();
+                    this.renderIframes();
+                }
+            }
+
+            renderTabs() {
+                const container = document.getElementById('tabs-container');
+                container.innerHTML = '';
+                
+                this.state.activeTabs.forEach(tab => {
+                    const isActive = this.state.currentTab === tab.id;
+                    const btn = document.createElement('div');
+                    btn.className = `group flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700/80 cursor-pointer min-w-[120px] max-w-[180px] transition-all text-xs select-none ${isActive ? 'bg-white dark:bg-dark-800 shadow-sm border-b-2 border-b-primary-500 z-10 font-bold' : 'bg-gray-100 dark:bg-dark-900/50 hover:bg-white dark:hover:bg-dark-800 text-gray-500'}`;
+                    btn.onclick = () => this.switchTab(tab.id);
+                    
+                    btn.innerHTML = `
+                        <span>${tab.icon}</span>
+                        <span class="truncate flex-1">${tab.name}</span>
+                        <button onclick="app.closeTab('${tab.id}', event)" class="w-5 h-5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-red-500 opacity-50 group-hover:opacity-100 transition-all"><i class="fas fa-times text-[10px]"></i></button>
+                    `;
+                    container.appendChild(btn);
+                });
+            }
+
+            renderIframes() {
+                const container = document.getElementById('iframes-container');
+                const layout = parseInt(this.db.settings.splitCount) || 1;
+                
+                if (document.getElementById('browser-view').classList.contains('hidden')) return;
+
+                const currentIframeIds = Array.from(container.querySelectorAll('.iframe-wrapper')).map(w => w.dataset.id);
+                let targetTabs = [];
+                
+                if (layout === 1) {
+                    if (this.state.currentTab) targetTabs = [this.state.activeTabs.find(t => t.id === this.state.currentTab)];
+                    document.getElementById('single-zoom-controls').classList.remove('hidden');
+                } else {
+                    targetTabs = this.state.activeTabs.slice(0, layout);
+                    document.getElementById('single-zoom-controls').classList.add('hidden');
+                }
+                
+                targetTabs = targetTabs.filter(t => t);
+
+                const needsRerender = currentIframeIds.length !== targetTabs.length || !currentIframeIds.every((id, i) => id === targetTabs[i]?.id);
+
+                if (needsRerender) {
+                    container.innerHTML = '';
+                    
+                    if (layout > 1) {
+                        container.className = `flex-1 relative bg-gray-200 dark:bg-dark-950 p-1.5 overflow-y-auto split-grid`;
+                        container.style.gridTemplateColumns = `repeat(auto-fit, minmax(320px, 1fr))`;
+                    } else {
+                        container.className = `flex-1 relative bg-gray-200 dark:bg-dark-950 p-0 overflow-hidden`;
+                        container.style.gridTemplateColumns = 'none';
+                    }
+
+                    targetTabs.forEach(tab => {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'iframe-wrapper active relative group bg-white dark:bg-dark-900 border border-gray-200 dark:border-gray-700 shadow-sm';
+                        if (layout === 1) wrapper.classList.add('rounded-none', 'border-0');
+                        wrapper.dataset.id = tab.id;
+                        
+                        if (layout > 1) {
+                            wrapper.innerHTML = `
+                                <div class="h-8 bg-gray-50 dark:bg-dark-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-2 text-xs shrink-0 cursor-pointer" onclick="app.switchTab('${tab.id}')">
+                                    <div class="flex items-center gap-1.5 font-semibold text-gray-700 dark:text-gray-200">
+                                        <span>${tab.icon}</span> <span class="truncate max-w-[150px]">${tab.name}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <button onclick="app.closeTab('${tab.id}', event)" class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-gray-500 hover:text-red-500"><i class="fas fa-times"></i></button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        const innerWrapper = document.createElement('div');
+                        innerWrapper.className = 'relative flex-1 overflow-hidden bg-white';
+                        
+                        const iframe = document.createElement('iframe');
+                        iframe.src = tab.url;
+                        iframe.className = 'tool-iframe w-full h-full border-none bg-white absolute top-0 left-0';
+                        iframe.id = `iframe-${tab.id}`;
+                        iframe.sandbox = "allow-same-origin allow-scripts allow-forms allow-popups allow-downloads allow-modals";
+                        
+                        const zoom = this.state.tabZoom[tab.id] || 100;
+                        iframe.style.transform = `scale(${zoom / 100})`;
+                        iframe.style.width = `${(100 / (zoom/100))}%`;
+                        iframe.style.height = `${(100 / (zoom/100))}%`;
+                        iframe.style.transformOrigin = '0 0';
+
+                        innerWrapper.appendChild(iframe);
+                        wrapper.appendChild(innerWrapper);
+                        container.appendChild(wrapper);
+                    });
+                } else {
+                    targetTabs.forEach(tab => {
+                        const iframe = document.getElementById(`iframe-${tab.id}`);
+                        if (iframe) {
+                            const zoom = this.state.tabZoom[tab.id] || 100;
+                            iframe.style.transform = `scale(${zoom / 100})`;
+                            iframe.style.width = `${(100 / (zoom/100))}%`;
+                            iframe.style.height = `${(100 / (zoom/100))}%`;
+                        }
+                    });
+                }
+
+                if (this.state.currentTab) {
+                    const t = this.state.activeTabs.find(t => t.id === this.state.currentTab);
+                    if (t) {
+                        document.getElementById('browser-url').innerText = t.url;
+                        document.getElementById('zoom-level').innerText = `${this.state.tabZoom[t.id] || 100}%`;
+                    }
+                }
+            }
+
+            changeSplitLayout(val) {
+                this.db.settings.splitCount = parseInt(val);
+                this.saveData();
+                this.renderIframes();
+            }
+
+            browserAction(action) {
+                if (!this.state.currentTab) return;
+                const iframe = document.getElementById(`iframe-${this.state.currentTab}`);
+                if (action === 'reload' && iframe) {
+                    iframe.src = iframe.src;
+                }
+            }
+
+            openExternal() {
+                if (!this.state.currentTab) return;
+                const tool = this.state.activeTabs.find(t => t.id === this.state.currentTab);
+                if (tool) {
+                    window.open(tool.url, '_blank');
+                }
+            }
+
+            zoom(delta) {
+                if (!this.state.currentTab) return;
+                const id = this.state.currentTab;
+                let current = this.state.tabZoom[id] || 100;
+                current += delta;
+                if (current < 20) current = 20;
+                if (current > 300) current = 300;
+                this.state.tabZoom[id] = current;
+                this.renderIframes();
+            }
+
+            resetZoom() {
+                if (!this.state.currentTab) return;
+                this.state.tabZoom[this.state.currentTab] = 100;
+                this.renderIframes();
+            }
+
+            openAddToolModal() {
+                document.getElementById('tool-modal-title').innerText = 'Agregar Herramienta';
+                document.getElementById('tool-id').value = '';
+                document.getElementById('tool-icon').value = '🪪';
+                document.getElementById('tool-name').value = '';
+                document.getElementById('tool-desc').value = '';
+                document.getElementById('tool-url').value = '';
+                document.getElementById('tool-favorite').checked = false;
+                document.getElementById('tool-is-encrypted').checked = false;
+                document.getElementById('tool-password').value = '';
+                document.getElementById('tool-password-container').classList.add('hidden');
+                
+                this.populateCategorySelect();
+                this.openModal('tool-modal');
+            }
+
+            openEditToolModal(id) {
+                const tool = this.db.tools.find(t => t.id === id);
+                if (!tool) return;
+                
+                document.getElementById('tool-modal-title').innerText = 'Editar Herramienta';
+                document.getElementById('tool-id').value = tool.id;
+                document.getElementById('tool-icon').value = tool.icon;
+                document.getElementById('tool-name').value = tool.name;
+                document.getElementById('tool-desc').value = tool.desc;
+                document.getElementById('tool-url').value = tool.url;
+                document.getElementById('tool-favorite').checked = tool.favorite;
+                document.getElementById('tool-is-encrypted').checked = tool.isEncrypted || false;
+                document.getElementById('tool-password').value = tool.password || '';
+                
+                if (tool.isEncrypted) {
+                    document.getElementById('tool-password-container').classList.remove('hidden');
+                } else {
+                    document.getElementById('tool-password-container').classList.add('hidden');
+                }
+
+                this.populateCategorySelect();
+                document.getElementById('tool-category').value = tool.category;
+                
+                this.openModal('tool-modal');
+            }
+
+            populateCategorySelect() {
+                const select = document.getElementById('tool-category');
+                select.innerHTML = '';
+                this.db.categories.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat.id;
+                    opt.innerText = `${cat.icon} ${cat.name}`;
+                    select.appendChild(opt);
+                });
+            }
+
+            saveTool() {
+                const id = document.getElementById('tool-id').value;
+                const tool = {
+                    id: id || 't_' + Date.now(),
+                    icon: document.getElementById('tool-icon').value || '🪪',
+                    name: document.getElementById('tool-name').value,
+                    desc: document.getElementById('tool-desc').value,
+                    url: document.getElementById('tool-url').value,
+                    category: document.getElementById('tool-category').value,
+                    favorite: document.getElementById('tool-favorite').checked,
+                    isEncrypted: document.getElementById('tool-is-encrypted').checked,
+                    password: document.getElementById('tool-password').value,
+                    lastUsed: id ? (this.db.tools.find(t=>t.id===id)?.lastUsed || 0) : 0,
+                    order: id ? (this.db.tools.find(t=>t.id===id)?.order || 0) : this.db.tools.length
+                };
+
+                if (!tool.name || !tool.url) {
+                    this.showToast('Nombre y URL son requeridos', 'error');
+                    return;
+                }
+
+                if (tool.isEncrypted && !tool.password) {
+                    this.showToast('Ingresa una contraseña para cifrar', 'error');
+                    return;
+                }
+
+                if (id) {
+                    const idx = this.db.tools.findIndex(t => t.id === id);
+                    if (idx !== -1) this.db.tools[idx] = tool;
+                } else {
+                    this.db.tools.push(tool);
+                }
+
+                this.saveData();
+                this.closeModal('tool-modal');
+                this.renderHome();
+                this.showToast('Herramienta guardada', 'success');
+            }
+
+            openCategoryModal() {
+                this.renderCategoriesSidebar();
+                this.openModal('category-modal');
+            }
+
+            addCategory() {
+                const name = document.getElementById('new-cat-name').value;
+                const icon = document.getElementById('new-cat-icon').value || '📁';
+                if (!name) return;
+                
+                const newCat = { id: 'cat_' + Date.now(), name, icon };
+                this.db.categories.push(newCat);
+                this.saveData();
+                this.renderCategoriesSidebar();
+                
+                document.getElementById('new-cat-name').value = '';
+                document.getElementById('new-cat-icon').value = '📁';
+            }
+
+            deleteCategory(id) {
+                if (this.db.tools.some(t => t.category === id)) {
+                    this.showToast('No puedes eliminar una categoría en uso', 'error');
+                    return;
+                }
+                if (confirm('¿Eliminar esta categoría?')) {
+                    this.db.categories = this.db.categories.filter(c => c.id !== id);
+                    this.saveData();
+                    this.renderCategoriesSidebar();
+                }
+            }
+
+            openNotesDrawer() {
+                document.getElementById('notes-drawer').classList.remove('translate-x-full');
+            }
+            closeNotesDrawer() {
+                document.getElementById('notes-drawer').classList.add('translate-x-full');
+            }
+            
+            filterNotesColor(color) {
+                this.state.notesFilterColor = color;
+                this.renderNotes();
+            }
+
+            addNote(color) {
+                const note = {
+                    id: 'n_' + Date.now(),
+                    title: 'Nueva Nota',
+                    content: '',
+                    color: color,
+                    date: Date.now()
+                };
+                this.db.notes.unshift(note);
+                this.saveData();
+                this.renderNotes();
+            }
+
+            deleteNote(id) {
+                this.db.notes = this.db.notes.filter(n => n.id !== id);
+                this.saveData();
+                this.renderNotes();
+            }
+
+            updateNote(id, field, value) {
+                const note = this.db.notes.find(n => n.id === id);
+                if (note) {
+                    note[field] = value;
+                    this.saveData();
+                }
+            }
+
+            renderNotes() {
+                const container = document.getElementById('notes-list-container');
+                container.innerHTML = '';
+                
+                let notes = this.db.notes;
+                if (this.state.notesFilterColor !== 'all') {
+                    notes = notes.filter(n => n.color === this.state.notesFilterColor);
+                }
+
+                document.getElementById('sidebar-notes-count').innerText = this.db.notes.length;
+                document.getElementById('top-notes-count').innerText = this.db.notes.length;
+
+                notes.forEach(note => {
+                    const el = document.createElement('div');
+                    el.className = `note-${note.color} rounded-xl p-3 border shadow-sm relative group mb-3`;
+                    
+                    el.innerHTML = `
+                        <button onclick="app.deleteNote('${note.id}')" class="absolute top-2 right-2 text-current opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-1"><i class="fas fa-trash text-xs"></i></button>
+                        <input type="text" value="${note.title}" onchange="app.updateNote('${note.id}', 'title', this.value)" class="w-[85%] bg-transparent font-bold text-sm outline-none mb-2 placeholder-current/50" placeholder="Título de la nota...">
+                        <textarea onchange="app.updateNote('${note.id}', 'content', this.value)" class="w-full bg-transparent text-xs outline-none resize-y min-h-[60px] placeholder-current/50" placeholder="Escribe aquí los detalles...">${note.content}</textarea>
+                        <div class="text-[9px] opacity-60 mt-2 text-right">${new Date(note.date).toLocaleDateString()}</div>
+                    `;
+                    container.appendChild(el);
+                });
+            }
+
+
+            saveFirebaseConfig() {
+                const config = {
+                    apiKey: document.getElementById('firebase-api-key').value.trim(),
+                    authDomain: document.getElementById('firebase-auth-domain').value.trim(),
+                    databaseURL: document.getElementById('firebase-database-url').value.trim(),
+                    projectId: document.getElementById('firebase-project-id').value.trim(),
+                    storageBucket: document.getElementById('firebase-storage-bucket').value.trim(),
+                    messagingSenderId: document.getElementById('firebase-messaging-sender-id').value.trim(),
+                    appId: document.getElementById('firebase-app-id').value.trim(),
+                    measurementId: document.getElementById('firebase-measurement-id').value.trim()
+                };
+                localStorage.setItem('firebase_config', JSON.stringify(config));
+                this.showToast('Credenciales de Firebase guardadas', 'success');
+            }
+
+            updateFirebaseStatus(state, message) {
+                const icon = document.getElementById('firebase-status-icon');
+                const text = document.getElementById('firebase-status-text');
+                const btn = document.getElementById('firebase-status-btn');
+                if (!icon || !text || !btn) return;
+                const map = {
+                    idle: ['text-gray-400','Firebase','bg-gray-500/10'],
+                    loading: ['text-yellow-500','Conectando...','bg-yellow-500/10'],
+                    ok: ['text-green-500', message || 'Conectado','bg-green-500/10'],
+                    error: ['text-red-500','Sin conexión','bg-red-500/10']
+                };
+                const v = map[state] || map.idle;
+                icon.className = 'fas fa-circle text-[9px] ' + v[0];
+                text.innerText = v[1];
+                btn.className = 'relative flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-sm ' + v[2] + ' border-gray-300/50 dark:border-gray-600/50';
+            }
+
+            async checkFirebaseConnection() {
+                this.updateFirebaseStatus('loading');
+                try {
+                    const result = await window.firebaseConnector.test();
+                    this.updateFirebaseStatus('ok', result.message);
+                    this.showToast(result.message, 'success');
+                } catch (e) {
+                    console.error(e);
+                    this.updateFirebaseStatus('error');
+                    this.showToast('No se pudo conectar con Firebase', 'error');
+                }
+            }
+
+            openConfigModal() {
+                const fc = JSON.parse(localStorage.getItem('firebase_config') || JSON.stringify(window.firebaseConnector.config));
+                document.getElementById('firebase-api-key').value = fc.apiKey || '';
+                document.getElementById('firebase-auth-domain').value = fc.authDomain || '';
+                document.getElementById('firebase-project-id').value = fc.projectId || '';
+                document.getElementById('firebase-database-url').value = fc.databaseURL || '';
+                document.getElementById('firebase-storage-bucket').value = fc.storageBucket || '';
+                document.getElementById('firebase-messaging-sender-id').value = fc.messagingSenderId || '';
+                document.getElementById('firebase-app-id').value = fc.appId || '';
+                document.getElementById('firebase-measurement-id').value = fc.measurementId || '';
+                document.getElementById('config-calc-url').value = this.db.settings.calcUrl || '';
+                
+                document.getElementById('config-home-bg-type').value = this.db.settings.homeBgType || 'image';
+                document.getElementById('config-home-bg').value = this.db.settings.homeBgUrl || '';
+                document.getElementById('config-home-color').value = this.db.settings.homeBgColor || '#1e293b';
+                
+                const hOp = this.db.settings.homeBgOpacity !== undefined ? this.db.settings.homeBgOpacity : 50;
+                document.getElementById('config-home-opacity').value = hOp;
+                document.getElementById('config-home-opacity-val').innerText = hOp + '%';
+                
+                const hBlur = this.db.settings.homeBgBlur !== undefined ? this.db.settings.homeBgBlur : 6;
+                document.getElementById('config-home-blur').value = hBlur;
+                document.getElementById('config-home-blur-val').innerText = hBlur + 'px';
+
+                document.getElementById('config-sidebar-bg-type').value = this.db.settings.sidebarBgType || 'image';
+                document.getElementById('config-sidebar-bg').value = this.db.settings.sidebarBgUrl || '';
+                document.getElementById('config-sidebar-color').value = this.db.settings.sidebarBgColor || '#ffffff';
+                
+                const sOp = this.db.settings.sidebarBgOpacity !== undefined ? this.db.settings.sidebarBgOpacity : 80;
+                document.getElementById('config-sidebar-opacity').value = sOp;
+                document.getElementById('config-sidebar-opacity-val').innerText = sOp + '%';
+                
+                const sBlur = this.db.settings.sidebarBgBlur !== undefined ? this.db.settings.sidebarBgBlur : 4;
+                document.getElementById('config-sidebar-blur').value = sBlur;
+                document.getElementById('config-sidebar-blur-val').innerText = sBlur + 'px';
+                
+                this.toggleBgInputs('home');
+                this.toggleBgInputs('sidebar');
+                
+                this.openModal('config-modal');
+            }
+
+            saveAdvancedConfig() {
+                this.db.settings.calcUrl = document.getElementById('config-calc-url').value;
+                
+                this.db.settings.homeBgType = document.getElementById('config-home-bg-type').value;
+                this.db.settings.homeBgUrl = document.getElementById('config-home-bg').value;
+                this.db.settings.homeBgColor = document.getElementById('config-home-color').value;
+                this.db.settings.homeBgOpacity = parseInt(document.getElementById('config-home-opacity').value);
+                this.db.settings.homeBgBlur = parseInt(document.getElementById('config-home-blur').value);
+                
+                this.db.settings.sidebarBgType = document.getElementById('config-sidebar-bg-type').value;
+                this.db.settings.sidebarBgUrl = document.getElementById('config-sidebar-bg').value;
+                this.db.settings.sidebarBgColor = document.getElementById('config-sidebar-color').value;
+                this.db.settings.sidebarBgOpacity = parseInt(document.getElementById('config-sidebar-opacity').value);
+                this.db.settings.sidebarBgBlur = parseInt(document.getElementById('config-sidebar-blur').value);
+                
+                this.saveData();
+                this.applyBackgrounds();
+                this.showToast('Ajustes guardados', 'success');
+            }
+
+            exportData() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.db));
+                const dlAnchorElem = document.createElement('a');
+                dlAnchorElem.setAttribute("href", dataStr);
+                dlAnchorElem.setAttribute("download", "grafiplot_backup_" + new Date().toISOString().slice(0,10) + ".json");
+                dlAnchorElem.click();
+            }
+
+            importData(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        if (parsed.tools && parsed.categories) {
+                            this.db = parsed;
+                            this.saveData();
+                            this.init();
+                            this.closeModal('config-modal');
+                            this.showToast('Datos importados con éxito', 'success');
+                        } else {
+                            throw new Error("Formato inválido");
+                        }
+                    } catch (err) {
+                        this.showToast('Error al importar el archivo JSON', 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+
+            toggleCalculator() {
+                const calc = document.getElementById('floating-calc');
+                if (calc.classList.contains('hidden')) {
+                    calc.classList.remove('hidden');
+                    setTimeout(() => calc.classList.remove('opacity-0'), 10);
+                    
+                    const body = document.getElementById('calc-body');
+                    if (body.innerHTML === '') {
+                        if (this.db.settings.calcUrl) {
+                            body.innerHTML = `<iframe src="${this.db.settings.calcUrl}" class="w-full h-full border-none"></iframe>`;
+                        } else {
+                            body.innerHTML = `
+                                <div class="p-4 flex flex-col h-full">
+                                    <input type="text" id="calc-display" readonly class="w-full bg-white dark:bg-dark-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-right text-2xl font-mono mb-4 text-gray-800 dark:text-gray-100 shadow-inner">
+                                    <div class="grid grid-cols-4 gap-2 flex-1">
+                                        ${['C', '(', ')', '/'].map(k => `<button onclick="app.calcPress('${k}')" class="bg-gray-200 dark:bg-gray-700 rounded-xl font-bold hover:bg-gray-300 dark:hover:bg-gray-600">${k}</button>`).join('')}
+                                        ${['7', '8', '9', '*'].map(k => `<button onclick="app.calcPress('${k}')" class="bg-white dark:bg-dark-800 rounded-xl font-bold border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700">${k}</button>`).join('')}
+                                        ${['4', '5', '6', '-'].map(k => `<button onclick="app.calcPress('${k}')" class="bg-white dark:bg-dark-800 rounded-xl font-bold border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700">${k}</button>`).join('')}
+                                        ${['1', '2', '3', '+'].map(k => `<button onclick="app.calcPress('${k}')" class="bg-white dark:bg-dark-800 rounded-xl font-bold border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700">${k}</button>`).join('')}
+                                        <button onclick="app.calcPress('0')" class="col-span-2 bg-white dark:bg-dark-800 rounded-xl font-bold border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700">0</button>
+                                        <button onclick="app.calcPress('.')" class="bg-white dark:bg-dark-800 rounded-xl font-bold border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700">.</button>
+                                        <button onclick="app.calcPress('=')" class="bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600">=</button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                } else {
+                    calc.classList.add('opacity-0');
+                    setTimeout(() => calc.classList.add('hidden'), 300);
+                }
+            }
+
+            calcPress(key) {
+                const display = document.getElementById('calc-display');
+                if (!display) return;
+                
+                if (key === 'C') {
+                    display.value = '';
+                } else if (key === '=') {
+                    try {
+                        // eslint-disable-next-line no-eval
+                        display.value = eval(display.value.replace(/[^0-9+\-*/.()]/g, ''));
+                    } catch(e) {
+                        display.value = 'Error';
+                        setTimeout(() => display.value = '', 1000);
+                    }
+                } else {
+                    if (display.value === 'Error') display.value = '';
+                    display.value += key;
+                }
+            }
+
+            makeDraggable(elmnt, header) {
+                let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+                header.onmousedown = dragMouseDown;
+
+                function dragMouseDown(e) {
+                    e = e || window.event;
+                    e.preventDefault();
+                    pos3 = e.clientX;
+                    pos4 = e.clientY;
+                    document.onmouseup = closeDragElement;
+                    document.onmousemove = elementDrag;
+                }
+
+                function elementDrag(e) {
+                    e = e || window.event;
+                    e.preventDefault();
+                    pos1 = pos3 - e.clientX;
+                    pos2 = pos4 - e.clientY;
+                    pos3 = e.clientX;
+                    pos4 = e.clientY;
+                    elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                    elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+                    elmnt.style.bottom = "auto";
+                    elmnt.style.right = "auto";
+                }
+
+                function closeDragElement() {
+                    document.onmouseup = null;
+                    document.onmousemove = null;
+                }
+            }
+            
+            toggleBgInputs(section) {
+                const type = document.getElementById(`config-${section}-bg-type`).value;
+                if (type === 'color') {
+                    document.getElementById(`config-${section}-image-group`).classList.add('hidden');
+                    document.getElementById(`config-${section}-color-group`).classList.remove('hidden');
+                } else {
+                    document.getElementById(`config-${section}-image-group`).classList.remove('hidden');
+                    document.getElementById(`config-${section}-color-group`).classList.add('hidden');
+                }
+            }
+        }
+
+        const app = new App();
+        window.addEventListener('load', () => app.updateFirebaseStatus('idle'));
+    </script>
+</body>
+</html>
